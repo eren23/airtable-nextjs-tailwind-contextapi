@@ -1,65 +1,71 @@
-import Head from 'next/head'
-import styles from '../styles/Home.module.css'
+import Head from "next/head";
+import Navbar from "../components/Navbar";
+import Todo from "../components/Todo";
+import { table, minifyRecords } from "./api/utils/Airtable";
+import { useContext, useEffect } from "react";
+import { TodosContext } from "../contexts/TodosContext";
+import auth0 from "./api/utils/auth0";
+import TodoForm from "../components/TodoForm";
 
-export default function Home() {
+export default function Home({ initialTodos, user }) {
+  // console.log(initialTodos);
+
+  const { todos, setTodos } = useContext(TodosContext);
+
+  useEffect(() => {
+    setTodos(initialTodos);
+  }, []);
+
   return (
-    <div className={styles.container}>
+    <div>
       <Head>
-        <title>Create Next App</title>
+        <title>Authenticaed Todo App</title>
         <link rel="icon" href="/favicon.ico" />
       </Head>
-
-      <main className={styles.main}>
-        <h1 className={styles.title}>
-          Welcome to <a href="https://nextjs.org">Next.js!</a>
-        </h1>
-
-        <p className={styles.description}>
-          Get started by editing{' '}
-          <code className={styles.code}>pages/index.js</code>
-        </p>
-
-        <div className={styles.grid}>
-          <a href="https://nextjs.org/docs" className={styles.card}>
-            <h3>Documentation &rarr;</h3>
-            <p>Find in-depth information about Next.js features and API.</p>
-          </a>
-
-          <a href="https://nextjs.org/learn" className={styles.card}>
-            <h3>Learn &rarr;</h3>
-            <p>Learn about Next.js in an interactive course with quizzes!</p>
-          </a>
-
-          <a
-            href="https://github.com/vercel/next.js/tree/master/examples"
-            className={styles.card}
-          >
-            <h3>Examples &rarr;</h3>
-            <p>Discover and deploy boilerplate example Next.js projects.</p>
-          </a>
-
-          <a
-            href="https://vercel.com/import?filter=next.js&utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-          >
-            <h3>Deploy &rarr;</h3>
-            <p>
-              Instantly deploy your Next.js site to a public URL with Vercel.
-            </p>
-          </a>
-        </div>
+      <Navbar user={user} />
+      <main>
+        {user && (
+          <>
+            <h1 className="text-2xl text-center mb-4"></h1>
+            <TodoForm />
+            <ul>
+              {todos &&
+                todos.map((todo) => {
+                  return <Todo key={todo.id} todo={todo} />;
+                })}
+            </ul>
+          </>
+        )}
       </main>
-
-      <footer className={styles.footer}>
-        <a
-          href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Powered by{' '}
-          <img src="/vercel.svg" alt="Vercel Logo" className={styles.logo} />
-        </a>
-      </footer>
     </div>
-  )
+  );
+}
+
+export async function getServerSideProps(context) {
+  const session = await auth0.getSession(context.req);
+  let todos = [];
+
+  console.log(session);
+  try {
+    if (session?.user) {
+      todos = await table
+        .select({
+          filterByFormula: `userId = '${session.user.sub}'`,
+        })
+        .firstPage();
+    }
+    return {
+      props: {
+        initialTodos: minifyRecords(todos),
+        user: session?.user || null,
+      },
+    };
+  } catch (err) {
+    console.log(err);
+    return {
+      props: {
+        err: "Something went wrong",
+      },
+    };
+  }
 }
